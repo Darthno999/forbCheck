@@ -25,7 +25,7 @@ collect_callgraph_files() {
 }
 
 generate_callgraph_json() {
-    perl - "$@" <<'PERL'
+    ACTIVE_PRESET_PATH="${ACTIVE_PRESET:-}" perl - "$@" <<'PERL'
 use strict;
 use warnings;
 use JSON::PP qw(encode_json);
@@ -148,10 +148,43 @@ sub count_lines_before {
     return 1 + ($prefix =~ tr/\n//);
 }
 
+sub load_forbidden_names {
+    my $preset_path = $ENV{ACTIVE_PRESET_PATH} || '';
+    return {} if !$preset_path || !-f $preset_path;
+
+    open my $preset_fh, '<', $preset_path or return {};
+    local $/ = undef;
+    my $raw = <$preset_fh>;
+    close $preset_fh;
+
+    return {} if !defined $raw || $raw eq '';
+
+    $raw =~ s/#.*$//mg;
+
+    if ($raw =~ /\bALL_MATH\b/) {
+        my $math_funcs = join ' ', qw(
+            cos sin tan acos asin atan atan2 cosh sinh tanh exp frexp ldexp
+            log log10 modf pow sqrt ceil fabs floor fmod round trunc abs labs
+        );
+        $raw =~ s/\bALL_MATH\b//g;
+        $raw .= " $math_funcs";
+    }
+
+    $raw =~ s/\b(?:BLACKLIST_MODE|ALL_MLX|ALL_MATH)\b//g;
+    $raw =~ tr/,/ /;
+
+    my %forbidden = map { $_ => 1 }
+        grep { defined $_ && $_ ne '' }
+        split /\s+/, $raw;
+
+    return \%forbidden;
+}
+
 my %defs;
 my @functions;
 my %seen_name;
 my %keywords = map { $_ => 1 } qw(if for while switch return sizeof case do else);
+my $forbidden_names = load_forbidden_names();
 
 for my $file (@ARGV) {
     open my $fh, '<', $file or next;
@@ -227,6 +260,7 @@ my @nodes = map {
         file      => $defs{$_}{file},
         line      => $defs{$_}{line},
         callCount => $incoming{$_} || 0,
+        forbidden => $forbidden_names->{$_} ? JSON::PP::true : JSON::PP::false,
     }
 } sort keys %defs;
 
@@ -283,9 +317,11 @@ generate_callgraph_report() {
       --panel-border: rgba(0, 212, 255, 0.18);
       --cyan: #00d4ff;
       --magenta: #ff00aa;
+      --orange: #ff9500;
+      --red: #ff3333;
       --text: #e0e0e0;
       --muted: #7f88a8;
-      --edge: #4a4a6a;
+      --edge: #ffffff;
       --shadow: 0 0 24px rgba(0, 212, 255, 0.18);
     }
 
@@ -325,7 +361,8 @@ generate_callgraph_report() {
     }
 
     #controls,
-    #info {
+    #info,
+    #legend {
       position: absolute;
       z-index: 2;
       backdrop-filter: blur(18px);
@@ -413,6 +450,72 @@ generate_callgraph_report() {
       overflow: auto;
     }
 
+    #legend {
+      left: 18px;
+      bottom: 18px;
+      width: min(280px, calc(100vw - 36px));
+      padding: 14px 16px;
+    }
+
+    #legend h2 {
+      margin: 0 0 10px;
+      color: var(--cyan);
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      color: var(--text);
+      font-size: 12px;
+      line-height: 1.6;
+    }
+
+    .legend-item + .legend-item {
+      margin-top: 8px;
+    }
+
+    .legend-dot,
+    .legend-line {
+      display: inline-block;
+      flex: 0 0 auto;
+    }
+
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 999px;
+      border: 2px solid transparent;
+    }
+
+    .legend-dot.user {
+      border-color: var(--cyan);
+      background: rgba(0, 212, 255, 0.25);
+    }
+
+    .legend-dot.forbidden {
+      border-color: var(--red);
+      background: rgba(255, 51, 51, 0.25);
+    }
+
+    .legend-line {
+      width: 20px;
+      height: 0;
+      border-top: 3px solid transparent;
+      border-radius: 999px;
+    }
+
+    .legend-line.outgoing {
+      border-top-color: var(--cyan);
+    }
+
+    .legend-line.incoming {
+      border-top-color: var(--orange);
+    }
+
     #info h2 {
       margin: 0 0 10px;
       color: var(--magenta);
@@ -430,10 +533,28 @@ generate_callgraph_report() {
 
     #info h3 {
       margin: 16px 0 8px;
-      color: var(--cyan);
       font-size: 12px;
       text-transform: uppercase;
       letter-spacing: 0.08em;
+    }
+
+    #info h3.section-outgoing {
+      color: var(--cyan);
+    }
+
+    #info h3.section-incoming {
+      color: var(--orange);
+    }
+
+    .section-indicator {
+      display: inline-block;
+      width: 8px;
+      height: 8px;
+      margin-right: 8px;
+      border-radius: 999px;
+      vertical-align: middle;
+      background: currentColor;
+      box-shadow: 0 0 10px currentColor;
     }
 
     #info ul {
@@ -447,6 +568,18 @@ generate_callgraph_report() {
     #info .empty {
       color: var(--muted);
       font-size: 13px;
+    }
+
+    #callsTo,
+    #callsTo ul,
+    #callsTo li {
+      color: var(--cyan);
+    }
+
+    #callsFrom,
+    #callsFrom ul,
+    #callsFrom li {
+      color: var(--orange);
     }
 
     svg {
@@ -463,7 +596,7 @@ generate_callgraph_report() {
     .edge {
       stroke: var(--edge);
       stroke-width: 1px;
-      stroke-opacity: 0.55;
+      stroke-opacity: 0.6;
     }
 
     .node {
@@ -476,10 +609,18 @@ generate_callgraph_report() {
     }
 
     .node.selected {
-      stroke: var(--magenta);
       stroke-width: 2.4px;
-      fill: rgba(255, 0, 170, 0.22);
       filter: url(#selected-glow);
+    }
+
+    .node.selected:not(.forbidden) {
+      stroke: var(--magenta);
+      fill: rgba(255, 0, 170, 0.22);
+    }
+
+    .node.forbidden {
+      stroke: var(--red);
+      fill: rgba(255, 51, 51, 0.25);
     }
 
     .node.match {
@@ -498,7 +639,8 @@ generate_callgraph_report() {
 
     @media (max-width: 920px) {
       #controls,
-      #info {
+      #info,
+      #legend {
         width: calc(100vw - 24px);
         left: 12px;
         right: 12px;
@@ -512,6 +654,11 @@ generate_callgraph_report() {
         top: auto;
         bottom: 12px;
         max-height: 42vh;
+      }
+
+      #legend {
+        top: auto;
+        bottom: calc(42vh + 24px);
       }
     }
   </style>
@@ -530,10 +677,17 @@ generate_callgraph_report() {
     <div id="info">
       <h2>Selection</h2>
       <p class="meta" id="nodeMeta">Click a node to inspect its call relationships.</p>
-      <h3>Functions Called</h3>
+      <h3 class="section-outgoing"><span class="section-indicator"></span>Functions Called</h3>
       <div id="callsTo"></div>
-      <h3>Functions Called By</h3>
+      <h3 class="section-incoming"><span class="section-indicator"></span>Functions Called By</h3>
       <div id="callsFrom"></div>
+    </div>
+    <div id="legend">
+      <h2>Legend</h2>
+      <div class="legend-item"><span class="legend-dot user"></span><span>User Function</span></div>
+      <div class="legend-item"><span class="legend-dot forbidden"></span><span>Forbidden Function</span></div>
+      <div class="legend-item"><span class="legend-line outgoing"></span><span>Calls (outgoing)</span></div>
+      <div class="legend-item"><span class="legend-line incoming"></span><span>Called by (incoming)</span></div>
     </div>
     <svg id="graph" aria-label="Function call graph"></svg>
   </div>
@@ -559,6 +713,11 @@ generate_callgraph_report() {
       ...node,
       radius: Math.max(8, 8 + (node.callCount || 0) * 3),
     }));
+
+    const DEFAULT_EDGE_COLOR = "#ffffff";
+    const DEFAULT_EDGE_OPACITY = 0.6;
+    const OUTGOING_EDGE_COLOR = "#00d4ff";
+    const INCOMING_EDGE_COLOR = "#ff9500";
 
     const outgoing = new Map(DATA.nodes.map((node) => [node.id, []]));
     const incoming = new Map(DATA.nodes.map((node) => [node.id, []]));
@@ -598,7 +757,7 @@ generate_callgraph_report() {
       .attr("flood-opacity", 0.75);
 
     defs.append("marker")
-      .attr("id", "arrow")
+      .attr("id", "arrow-default")
       .attr("viewBox", "0 -5 10 10")
       .attr("refX", 18)
       .attr("refY", 0)
@@ -606,8 +765,34 @@ generate_callgraph_report() {
       .attr("markerHeight", 7)
       .attr("orient", "auto")
       .append("path")
-      .attr("fill", "#4a4a6a")
-      .attr("fill-opacity", 0.75)
+      .attr("fill", DEFAULT_EDGE_COLOR)
+      .attr("fill-opacity", DEFAULT_EDGE_OPACITY)
+      .attr("d", "M0,-5L10,0L0,5");
+
+    defs.append("marker")
+      .attr("id", "arrow-outgoing")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 18)
+      .attr("refY", 0)
+      .attr("markerWidth", 7)
+      .attr("markerHeight", 7)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("fill", OUTGOING_EDGE_COLOR)
+      .attr("fill-opacity", 0.95)
+      .attr("d", "M0,-5L10,0L0,5");
+
+    defs.append("marker")
+      .attr("id", "arrow-incoming")
+      .attr("viewBox", "0 -5 10 10")
+      .attr("refX", 18)
+      .attr("refY", 0)
+      .attr("markerWidth", 7)
+      .attr("markerHeight", 7)
+      .attr("orient", "auto")
+      .append("path")
+      .attr("fill", INCOMING_EDGE_COLOR)
+      .attr("fill-opacity", 0.95)
       .attr("d", "M0,-5L10,0L0,5");
 
     const root = svg.append("g");
@@ -628,7 +813,7 @@ generate_callgraph_report() {
       .enter()
       .append("line")
       .attr("class", "edge")
-      .attr("marker-end", "url(#arrow)");
+      .attr("marker-end", "url(#arrow-default)");
 
     const node = nodeLayer.selectAll("circle")
       .data(DATA.nodes)
@@ -666,6 +851,14 @@ generate_callgraph_report() {
       .on("tick", ticked);
 
     let selectedId = null;
+
+    function edgeSourceId(edge) {
+      return typeof edge.source === "string" ? edge.source : edge.source.id;
+    }
+
+    function edgeTargetId(edge) {
+      return typeof edge.target === "string" ? edge.target : edge.target.id;
+    }
 
     function ticked() {
       link
@@ -746,18 +939,42 @@ generate_callgraph_report() {
           .filter((d) => !query || d.id.toLowerCase().includes(query) || d.file.toLowerCase().includes(query))
           .map((d) => d.id)
       );
+      const selectedOutgoing = new Set(selectedId ? (outgoing.get(selectedId) || []) : []);
+      const selectedIncoming = new Set(selectedId ? (incoming.get(selectedId) || []) : []);
 
       node
         .classed("selected", (d) => d.id === selectedId)
+        .classed("forbidden", (d) => !!d.forbidden)
         .classed("match", (d) => !!query && matches.has(d.id))
         .style("opacity", (d) => !query || matches.has(d.id) ? 1 : 0.14);
 
       label.style("opacity", (d) => !query || matches.has(d.id) ? 0.95 : 0.12);
 
-      link.style("opacity", (d) => {
-        if (!query) return 0.55;
-        return matches.has(d.source.id) || matches.has(d.target.id) ? 0.72 : 0.06;
-      });
+      link
+        .style("stroke", (d) => {
+          const sourceId = edgeSourceId(d);
+          const targetId = edgeTargetId(d);
+          if (selectedId && sourceId === selectedId && selectedOutgoing.has(targetId)) return OUTGOING_EDGE_COLOR;
+          if (selectedId && targetId === selectedId && selectedIncoming.has(sourceId)) return INCOMING_EDGE_COLOR;
+          return DEFAULT_EDGE_COLOR;
+        })
+        .style("opacity", (d) => {
+          const sourceId = edgeSourceId(d);
+          const targetId = edgeTargetId(d);
+          const isSelectedEdge =
+            (selectedId && sourceId === selectedId && selectedOutgoing.has(targetId)) ||
+            (selectedId && targetId === selectedId && selectedIncoming.has(sourceId));
+          if (isSelectedEdge) return 0.95;
+          if (!query) return DEFAULT_EDGE_OPACITY;
+          return matches.has(sourceId) || matches.has(targetId) ? 0.72 : 0.06;
+        })
+        .attr("marker-end", (d) => {
+          const sourceId = edgeSourceId(d);
+          const targetId = edgeTargetId(d);
+          if (selectedId && sourceId === selectedId && selectedOutgoing.has(targetId)) return "url(#arrow-outgoing)";
+          if (selectedId && targetId === selectedId && selectedIncoming.has(sourceId)) return "url(#arrow-incoming)";
+          return "url(#arrow-default)";
+        });
     }
 
     searchEl.addEventListener("input", updateStyles);
