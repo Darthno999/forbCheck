@@ -712,8 +712,8 @@ generate_callgraph_report() {
     <div id="legend">
       <h2>Legend</h2>
       <div class="legend-item"><span class="legend-dot user"></span><span>User Function (local)</span></div>
-      <div class="legend-item"><span class="legend-dot external"></span><span>External Authorized (lib)</span></div>
       <div class="legend-item"><span class="legend-dot forbidden"></span><span>Forbidden Function</span></div>
+      <div class="legend-item"><span class="legend-dot external"></span><span>External Authorized (lib)</span></div>
       <div class="legend-item"><span class="legend-line outgoing"></span><span>Calls (outgoing)</span></div>
       <div class="legend-item"><span class="legend-line incoming"></span><span>Called by (incoming)</span></div>
     </div>
