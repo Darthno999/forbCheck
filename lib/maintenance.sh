@@ -128,7 +128,7 @@ update_script() {
 }
 
 auto_check_update() {
-    [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ] && return
+    [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ] || [ "$USE_GRAPH" = true ] && return
     local remote_v=$(curl -s --max-time 1 "$UPDATE_URL" | grep -E "^(readonly )?VERSION=" | head -n 1 | cut -d'"' -f2)
     if [ -n "$remote_v" ] && [ "$(version_to_int "$remote_v")" -gt "$(version_to_int "$VERSION")" ]; then
         echo -ne "${YELLOW}New version (v${remote_v}) available! Update now? (y/n): ${NC}"; read -r choice

@@ -1,8 +1,8 @@
 # COMPLETE DOCUMENTATION - ForbCheck (forb.sh)
 
-**Version:** 1.15.0
+**Version:** 1.16.0
 **Author:** Mrdolls
-**Update Date:** 2026-04-09
+**Update Date:** 2026-04-10
 **Repository:** https://github.com/Mrdolls/forbCheck
 
 ---
@@ -132,7 +132,7 @@ If a dependency is missing, ForbCheck will display an error and exit with code 1
 **Example:**
 ```bash
 ./forb.sh --version
-# Output: V1.15.0
+# Output: V1.16.0
 ```
 
 ---
@@ -159,7 +159,7 @@ If a dependency is missing, ForbCheck will display an error and exit with code 1
 ```json
 {
   "target": "<binary_path>",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "forbidden_count": 5,
   "mode": "whitelist",
   "results": [
@@ -291,13 +291,13 @@ cat ~/.forb/logs/l1_*.log
 ./forb.sh --time <target>
 ```
 
-**Description:** Displays the scan execution duration in seconds.
+**Description:** Displays the scan execution time in seconds.
 
 **Behavior:**
-- Measures time from scan start to finish
-- Displays duration before the final result (PERFECT or FAILURE)
-- Format: decimal number in seconds (e.g., `1.234`)
-- **Requires `bc`**: If `bc` is not installed, displays `0`
+- Measures time from the start of the scan to the end
+- Displays the duration before the final result (PERFECT or FAILURE)
+- Format: decimal seconds (e.g., `1.234`)
+- **Depends on `bc`**: If `bc` is not installed, displays `0`
 
 **Implementation:**
 - On macOS: uses `perl -MTime::HiRes=time`
@@ -306,11 +306,36 @@ cat ~/.forb/logs/l1_*.log
 **Example:**
 ```bash
 ./forb.sh -t ./my_binary
-# Output:
-# ...
-# RESULT: FAILURE
-# 2.456
 ```
+
+---
+
+#### `-A` / `--analyse`
+
+**Syntax:**
+```bash
+./forb.sh -A
+./forb.sh --analyse
+```
+
+**Description:** Opens the interactive Project Analysis Dashboard (TUI) for a deep dive into your project structure.
+
+**Dashboard Features:**
+- **Premium TUI Interface**: Dynamic Cyan/Green design with intuitive keyboard navigation.
+- **Automatic Classification**: Separates internal functions (your sources) from external calls (system/libc).
+- **Deep Macro Scan**: Recursive analysis of `#define` to find hidden calls.
+- **Smart Macro Filtering**: Horizontal tabs for sorting macros.
+
+**Behavior:**
+- Uses **Skeleton Parsing** for flawless signature detection.
+- **Zero False Positives**: Internal functions take absolute priority.
+- Highly optimized for large C projects (42 style).
+
+**Behavior:**
+- Measures time from scan start to finish
+- Displays duration before the final result (PERFECT or FAILURE)
+- Format: decimal number in seconds (e.g., `1.234`)
+- **Requires `bc`**: If `bc` is not installed, displays `0`
 
 ---
 

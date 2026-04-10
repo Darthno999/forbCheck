@@ -1,8 +1,8 @@
 # DOCUMENTATION COMPLÈTE - ForbCheck (forb.sh)
 
-**Version :** 1.15.0
+**Version :** 1.16.0
 **Auteur :** Mrdolls
-**Date de mise à jour :** 2026-04-09
+**Date de mise à jour :** 2026-04-10
 **Repository :** https://github.com/Mrdolls/forbCheck
 
 ---
@@ -132,7 +132,7 @@ Si une dépendance manque, ForbCheck affichera une erreur et quittera avec le co
 **Exemple :**
 ```bash
 ./forb.sh --version
-# Output: V1.15.0
+# Output: V1.16.0
 ```
 
 ---
@@ -159,7 +159,7 @@ Si une dépendance manque, ForbCheck affichera une erreur et quittera avec le co
 ```json
 {
   "target": "<binary_path>",
-  "version": "1.15.0",
+  "version": "1.16.0",
   "forbidden_count": 5,
   "mode": "whitelist",
   "results": [
@@ -306,11 +306,31 @@ cat ~/.forb/logs/l1_*.log
 **Exemple :**
 ```bash
 ./forb.sh -t ./my_binary
-# Output:
-# ...
-# RESULT: FAILURE
-# 2.456
 ```
+
+---
+
+#### `-A` / `--analyse`
+
+**Syntaxe :**
+```bash
+./forb.sh -A
+./forb.sh --analyse
+```
+
+**Description :** Ouvre le tableau de bord interactif (TUI) pour une analyse profonde de la structure du projet C/C++.
+
+**Fonctionnalités du Dashboard :**
+- **Interface TUI Premium** : Design Cyan/Vert dynamique avec navigation clavier intuitive.
+- **Classification Automatique** : Sépare les fonctions internes (vos sources) des appels externes (système/libc).
+- **Deep Macro Scan** : Analyse récursive des `#define` pour débusquer les fonctions cachées au cœur de macros complexes.
+- **Navigation par Fichiers** : Exploration de l'intégralité des fichiers du projet (incluant les Headers).
+- **Filtrage Intelligent des Macros** : Onglets horizontaux pour trier les macros (Header Guards, Numeric, Strings, etc.).
+
+**Comportement :**
+- Utilise le **Skeleton Parsing** pour détecter les signatures de fonctions complexes.
+- **Zéro Faux Positif** : Si une définition existe, elle ne sera jamais marquée comme externe.
+- Génère un journal d'audit complet dans `~/.forb/logs/analyse_engine.log`.
 
 ---
 
