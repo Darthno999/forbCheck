@@ -25,7 +25,7 @@ collect_callgraph_files() {
 }
 
 generate_callgraph_json() {
-    ACTIVE_PRESET_PATH="${ACTIVE_PRESET:-}" perl - "$@" <<'PERL'
+    ACTIVE_PRESET_PATH="${ACTIVE_PRESET:-}" BLACKLIST_MODE="${BLACKLIST_MODE:-false}" perl - "$@" <<'PERL'
 use strict;
 use warnings;
 use JSON::PP qw(encode_json);
@@ -150,6 +150,7 @@ sub count_lines_before {
 
 sub load_forbidden_names {
     my $preset_path = $ENV{ACTIVE_PRESET_PATH} || '';
+    my $is_blacklist = ($ENV{BLACKLIST_MODE} // 'false') eq 'true';
     return {} if !$preset_path || !-f $preset_path;
 
     open my $preset_fh, '<', $preset_path or return {};
@@ -173,11 +174,15 @@ sub load_forbidden_names {
     $raw =~ s/\b(?:BLACKLIST_MODE|ALL_MLX|ALL_MATH)\b//g;
     $raw =~ tr/,/ /;
 
-    my %forbidden = map { $_ => 1 }
+    my %preset_funcs = map { $_ => 1 }
         grep { defined $_ && $_ ne '' }
         split /\s+/, $raw;
 
-    return \%forbidden;
+    if ($is_blacklist) {
+        return \%preset_funcs;
+    } else {
+        return \%preset_funcs;  # whitelist: preset = allowed, check against this set later
+    }
 }
 
 my %defs;
@@ -269,12 +274,16 @@ for my $func (@functions) {
 }
 
 my @nodes = map {
+    my $is_blacklist = ($ENV{BLACKLIST_MODE} // 'false') eq 'true';
+    my $is_forbidden = $is_blacklist
+        ? !!$forbidden_names->{$_}
+        : (!!$forbidden_names->{$_} && !$is_user_func{$_});
     +{
         id        => $defs{$_}{id},
         file      => $defs{$_}{file},
         line      => $defs{$_}{line},
         callCount => $incoming{$_} || 0,
-        forbidden => $forbidden_names->{$_} ? JSON::PP::true : JSON::PP::false,
+        forbidden => $is_forbidden ? JSON::PP::true : JSON::PP::false,
         isUserFunction => $is_user_func{$_} ? JSON::PP::true : JSON::PP::false,
     }
 } sort keys %defs;
@@ -638,16 +647,16 @@ generate_callgraph_report() {
       fill: rgba(255, 0, 170, 0.22);
     }
 
-    .node.forbidden {
-      stroke: var(--red);
-      stroke-width: 2px;
-      fill: rgba(255, 51, 51, 0.3);
-    }
-
     .node.external {
       stroke: var(--orange);
       stroke-width: 1.8px;
       fill: rgba(255, 149, 0, 0.25);
+    }
+
+    .node.forbidden {
+      stroke: var(--red);
+      stroke-width: 2px;
+      fill: rgba(255, 51, 51, 0.3);
     }
 
     .node.match {
