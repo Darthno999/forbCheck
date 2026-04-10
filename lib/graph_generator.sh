@@ -25,10 +25,10 @@ collect_callgraph_files() {
 }
 
 generate_callgraph_json() {
-    ACTIVE_PRESET_PATH="${ACTIVE_PRESET:-}" BLACKLIST_MODE="${BLACKLIST_MODE:-false}" perl - "$@" <<'PERL'
+    FORBIDDEN_NAMES_JSON="${FORBIDDEN_NAMES_JSON:-[]}" perl - "$@" <<'PERL'
 use strict;
 use warnings;
-use JSON::PP qw(encode_json);
+use JSON::PP qw(decode_json encode_json);
 
 sub sanitize_c {
     my ($text) = @_;
@@ -148,48 +148,13 @@ sub count_lines_before {
     return 1 + ($prefix =~ tr/\n//);
 }
 
-sub load_forbidden_names {
-    my $preset_path = $ENV{ACTIVE_PRESET_PATH} || '';
-    my $is_blacklist = ($ENV{BLACKLIST_MODE} // 'false') eq 'true';
-    return {} if !$preset_path || !-f $preset_path;
-
-    open my $preset_fh, '<', $preset_path or return {};
-    local $/ = undef;
-    my $raw = <$preset_fh>;
-    close $preset_fh;
-
-    return {} if !defined $raw || $raw eq '';
-
-    $raw =~ s/#.*$//mg;
-
-    if ($raw =~ /\bALL_MATH\b/) {
-        my $math_funcs = join ' ', qw(
-            cos sin tan acos asin atan atan2 cosh sinh tanh exp frexp ldexp
-            log log10 modf pow sqrt ceil fabs floor fmod round trunc abs labs
-        );
-        $raw =~ s/\bALL_MATH\b//g;
-        $raw .= " $math_funcs";
-    }
-
-    $raw =~ s/\b(?:BLACKLIST_MODE|ALL_MLX|ALL_MATH)\b//g;
-    $raw =~ tr/,/ /;
-
-    my %preset_funcs = map { $_ => 1 }
-        grep { defined $_ && $_ ne '' }
-        split /\s+/, $raw;
-
-    if ($is_blacklist) {
-        return \%preset_funcs;
-    } else {
-        return \%preset_funcs;  # whitelist: preset = allowed, check against this set later
-    }
-}
-
 my %defs;
 my @functions;
 my %seen_name;
 my %keywords = map { $_ => 1 } qw(if for while switch return sizeof case do else);
-my $forbidden_names = load_forbidden_names();
+my $forbidden_names_raw = $ENV{FORBIDDEN_NAMES_JSON} || '[]';
+my $forbidden_names_list = eval { decode_json($forbidden_names_raw) } || [];
+my %forbidden_names = map { $_ => 1 } grep { defined $_ && $_ ne '' } @$forbidden_names_list;
 
 for my $file (@ARGV) {
     open my $fh, '<', $file or next;
@@ -274,16 +239,12 @@ for my $func (@functions) {
 }
 
 my @nodes = map {
-    my $is_blacklist = ($ENV{BLACKLIST_MODE} // 'false') eq 'true';
-    my $is_forbidden = $is_blacklist
-        ? !!$forbidden_names->{$_}
-        : (!!$forbidden_names->{$_} && !$is_user_func{$_});
     +{
         id        => $defs{$_}{id},
         file      => $defs{$_}{file},
         line      => $defs{$_}{line},
         callCount => $incoming{$_} || 0,
-        forbidden => $is_forbidden ? JSON::PP::true : JSON::PP::false,
+        forbidden => $forbidden_names{$_} ? JSON::PP::true : JSON::PP::false,
         isUserFunction => $is_user_func{$_} ? JSON::PP::true : JSON::PP::false,
     }
 } sort keys %defs;
@@ -301,13 +262,55 @@ for my $source (sort keys %edges) {
 print encode_json({
     nodes => \@nodes,
     edges => \@links,
+    forbiddenNames => [ sort keys %forbidden_names ],
 });
 PERL
 }
 
+collect_forbidden_names_json() {
+    local files=("$@")
+    local forb_bin="$HOME/.local/bin/forb"
+    local scan_output
+
+    if [ ! -x "$forb_bin" ]; then
+        forb_bin="$HOME/.forb/bin/forb"
+    fi
+
+    if [ ! -x "$forb_bin" ]; then
+        echo "[]"
+        return 0
+    fi
+
+    scan_output=$("$forb_bin" -s --json -f "${files[@]}" 2>/dev/null)
+    if [ -z "$scan_output" ]; then
+        echo "[]"
+        return 0
+    fi
+
+    printf '%s' "$scan_output" | perl -MJSON::PP=decode_json,encode_json -e '
+        use strict;
+        use warnings;
+
+        local $/;
+        my $raw = <STDIN>;
+        my $data = eval { decode_json($raw) };
+        if (!$data || ref($data) ne "HASH") {
+            print "[]";
+            exit 0;
+        }
+
+        my %seen;
+        my @names = grep { defined $_ && $_ ne "" && !$seen{$_}++ }
+            map { ref($_) eq "HASH" ? ($_->{function} // ()) : () }
+            @{ $data->{results} || [] };
+
+        print encode_json(\@names);
+    '
+}
+
 generate_callgraph_report() {
     local graph_file="$PWD/forb_callgraph.html"
-    local file_list json_data
+    local file_list json_data forbidden_names_json
     local files=()
     local file
 
@@ -321,7 +324,8 @@ generate_callgraph_report() {
         [ -n "$file" ] && files+=("$file")
     done <<< "$file_list"
 
-    json_data=$(generate_callgraph_json "${files[@]}")
+    forbidden_names_json=$(collect_forbidden_names_json "${files[@]}")
+    json_data=$(FORBIDDEN_NAMES_JSON="$forbidden_names_json" generate_callgraph_json "${files[@]}")
     if [ -z "$json_data" ]; then
         echo -ne "\n${RED}Call graph generation failed: unable to build graph dataset.${NC}\n"
         return 1
@@ -642,11 +646,6 @@ generate_callgraph_report() {
       filter: url(#selected-glow);
     }
 
-    .node.selected:not(.forbidden) {
-      stroke: var(--magenta);
-      fill: rgba(255, 0, 170, 0.22);
-    }
-
     .node.external {
       stroke: var(--orange);
       stroke-width: 1.8px;
@@ -732,6 +731,7 @@ generate_callgraph_report() {
   <script src="https://cdn.jsdelivr.net/npm/d3@7"></script>
   <script>
     const DATA = $json_data;
+    const forbiddenNames = new Set(DATA.forbiddenNames || []);
 
     const svg = d3.select("#graph");
     const width = window.innerWidth;
@@ -988,8 +988,8 @@ generate_callgraph_report() {
 
       node
         .classed("selected", (d) => d.id === selectedId)
-        .classed("forbidden", (d) => !!d.forbidden)
-        .classed("external", (d) => !d.forbidden && !d.isUserFunction)
+        .classed("forbidden", (d) => forbiddenNames.has(d.id))
+        .classed("external", (d) => !forbiddenNames.has(d.id) && !d.isUserFunction)
         .classed("match", (d) => !!query && matches.has(d.id))
         .style("opacity", (d) => {
           if (query && matches.has(d.id)) return 1;
