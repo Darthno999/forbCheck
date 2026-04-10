@@ -238,6 +238,11 @@ for my $file (@ARGV) {
 
 my %edges;
 my %incoming;
+my %is_user_func;
+
+for my $func (@functions) {
+    $is_user_func{$func->{id}} = 1;
+}
 
 for my $func (@functions) {
     my $source = $func->{id};
@@ -245,9 +250,18 @@ for my $func (@functions) {
 
     while ($body =~ /\b([A-Za-z_]\w*)\s*\(/g) {
         my $target = $1;
-        next if !exists $defs{$target};
         next if $keywords{$target};
         next if $edges{$source}{$target};
+
+        # Add external functions as nodes if not already defined
+        if (!exists $defs{$target}) {
+            $defs{$target} = {
+                id => $target,
+                file => $func->{file},
+                line => 0,
+            };
+            push @functions, { id => $target, body => '' };
+        }
 
         $edges{$source}{$target} = 1;
         $incoming{$target}++;
@@ -261,6 +275,7 @@ my @nodes = map {
         line      => $defs{$_}{line},
         callCount => $incoming{$_} || 0,
         forbidden => $forbidden_names->{$_} ? JSON::PP::true : JSON::PP::false,
+        isUserFunction => $is_user_func{$_} ? JSON::PP::true : JSON::PP::false,
     }
 } sort keys %defs;
 
@@ -501,6 +516,12 @@ generate_callgraph_report() {
       background: rgba(255, 51, 51, 0.25);
     }
 
+    .legend-dot.external {
+      border-color: var(--red);
+      background: rgba(255, 51, 51, 0.15);
+      border-style: dashed;
+    }
+
     .legend-line {
       width: 20px;
       height: 0;
@@ -620,7 +641,14 @@ generate_callgraph_report() {
 
     .node.forbidden {
       stroke: var(--red);
+      stroke-dasharray: 0;
       fill: rgba(255, 51, 51, 0.25);
+    }
+
+    .node.external {
+      stroke: var(--red);
+      stroke-dasharray: 4 3;
+      fill: rgba(255, 51, 51, 0.15);
     }
 
     .node.match {
@@ -684,8 +712,9 @@ generate_callgraph_report() {
     </div>
     <div id="legend">
       <h2>Legend</h2>
-      <div class="legend-item"><span class="legend-dot user"></span><span>User Function</span></div>
+      <div class="legend-item"><span class="legend-dot user"></span><span>User Function (local)</span></div>
       <div class="legend-item"><span class="legend-dot forbidden"></span><span>Forbidden Function</span></div>
+      <div class="legend-item"><span class="legend-dot external"></span><span>External Function (lib)</span></div>
       <div class="legend-item"><span class="legend-line outgoing"></span><span>Calls (outgoing)</span></div>
       <div class="legend-item"><span class="legend-line incoming"></span><span>Called by (incoming)</span></div>
     </div>
@@ -945,6 +974,7 @@ generate_callgraph_report() {
       node
         .classed("selected", (d) => d.id === selectedId)
         .classed("forbidden", (d) => !!d.forbidden)
+        .classed("external", (d) => !d.forbidden && !d.isUserFunction)
         .classed("match", (d) => !!query && matches.has(d.id))
         .style("opacity", (d) => !query || matches.has(d.id) ? 1 : 0.14);
 
