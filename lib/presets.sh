@@ -86,7 +86,7 @@ resolve_preset() {
         prompt_preset_menu
         return 0
     fi
-    if [ "$DISABLE_AUTO" = "true" ] && { [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ]; }; then
+    if [ "$DISABLE_AUTO" = "true" ] && { [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ] || [ "$USE_GRAPH" = true ]; }; then
         export SELECTED_PRESET="default"
         return 0
     fi
@@ -104,7 +104,7 @@ resolve_preset() {
     fi
     [ -n "$SELECTED_PRESET" ] && return 0
 
-    if [ "$DO_EDIT_LIST" = true ] || [ "$RUN_LIST" = true ] || [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ]; then
+    if [ "$DO_EDIT_LIST" = true ] || [ "$RUN_LIST" = true ] || [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ] || [ "$USE_GRAPH" = true ]; then
         export SELECTED_PRESET="default"
         return 0
     fi

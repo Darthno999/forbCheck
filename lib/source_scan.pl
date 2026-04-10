@@ -10,7 +10,7 @@ my %safe = map { $_ => 1 } split(" ", $ENV{WHITELIST} || "");
 my %user_defined = map { $_ => 1 } split(" ", $ENV{USER_FUNCS} || "");
 my $allow_mlx = $ENV{ALLOW_MLX} || 0;
 my $count = 0;
-my $json_mode = ($ENV{USE_JSON} eq "true" || $ENV{USE_HTML} eq "true") ? "true" : "false";
+my $json_mode = ($ENV{USE_JSON} eq "true" || $ENV{USE_HTML} eq "true" || $ENV{USE_GRAPH} eq "true") ? "true" : "false";
 my $show_all = ($ENV{SHOW_ALL} eq "true");
 my $no_summary = ($ENV{NO_SUMMARY} eq "true");
 my %kw_macros = map { $_ => 1 } split(" ", $ENV{KEYWORDS_MACROS} || "");

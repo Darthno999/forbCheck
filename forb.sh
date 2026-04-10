@@ -5,7 +5,7 @@
 # ==============================================================================
 
 # Constants
-readonly VERSION="1.15.0" # Searchable presets
+readonly VERSION="1.16.0" # Interactive analysis
 readonly INSTALL_DIR="$HOME/.forb"
 readonly LOG_DIR="$HOME/.forb/logs"
 readonly PRESET_DIR="$INSTALL_DIR/presets"
@@ -16,6 +16,7 @@ ACTIVE_PRESET="$PRESET_DIR/default.preset"
 LOG_FILE=""
 USE_JSON=false
 USE_HTML=false
+USE_GRAPH=false
 USE_PRESET=0
 SHOW_ALL=false
 USE_MLX=false
@@ -44,14 +45,14 @@ DO_CREATE_PRESET=false
 DO_REMOVE_PRESET=false
 DO_EDIT_LIST=false
 RUN_LIST=false
-DO_ANALYSE=false
 LIST_FUNCS=""
+DO_ANALYSE=false
 
 # OS Detection
 if [[ "$OSTYPE" == "darwin"* ]]; then readonly IS_MAC=true; else readonly IS_MAC=false; fi
 
 # Load Modules
-for module in ui.sh utils.sh presets.sh scan.sh output_generator.sh maintenance.sh html_generator.sh analyse.sh; do
+for module in ui.sh utils.sh presets.sh scan.sh analyse.sh output_generator.sh maintenance.sh html_generator.sh graph_generator.sh; do
     if [ -f "$INSTALL_DIR/lib/$module" ]; then
         source "$INSTALL_DIR/lib/$module"
     else
@@ -62,7 +63,7 @@ done
 
 # Initialize Structure
 bootstrap_directories() {
-    local dirs=("doc" "presets" "lib" "cache" "logs" "reports_html")
+    local dirs=("doc" "presets" "lib" "cache" "logs" "reports_html" "reports_graph")
     for d in "${dirs[@]}"; do
         mkdir -p "$INSTALL_DIR/$d"
     done
@@ -92,10 +93,12 @@ while [[ $# -gt 0 ]]; do
         --version) SHOW_VERSION=true; shift ;;
         --json) USE_JSON=true; shift ;;
         --html) USE_HTML=true; shift ;;
+        --graph) USE_GRAPH=true; shift ;;
         --log) PUT_LOG=true; shift ;;
         -up|--update) DO_UPDATE=true; shift ;;
         --remove) DO_REMOVE=true; shift ;;
         --no-auto) DISABLE_AUTO=true; shift ;;
+        -A|--analyse) DO_ANALYSE=true; shift ;;
         -b|--blacklist) export BLACKLIST_MODE=true; shift ;;
         -s|--source) FORCE_SOURCE_SCAN=true; shift ;;
         -v|--verbose) VERBOSE=true; shift ;;
@@ -112,7 +115,6 @@ while [[ $# -gt 0 ]]; do
         -ol|--open-logs) DO_OPEN_LOGS=true; shift ;;
         -cp|--create-preset) DO_CREATE_PRESET=true; shift ;;
         -rp|--remove-preset) DO_REMOVE_PRESET=true; shift ;;
-        --analyse) DO_ANALYSE=true; shift ;;
         -e|--edit) DO_EDIT_LIST=true; shift ;;
         -l|--list)
             RUN_LIST=true; shift
@@ -146,11 +148,11 @@ if [ "$DO_OPEN_HTML" = true ]; then open_html; fi
 if [ "$DO_OPEN_LOGS" = true ]; then open_logs; fi
 if [ "$DO_CREATE_PRESET" = true ]; then create_preset; fi
 if [ "$DO_REMOVE_PRESET" = true ]; then remove_preset; fi
-if [ "$DO_ANALYSE" = true ]; then run_analyse_mode "${TARGET:-.}"; safe_exit 0; fi
+if [ "$DO_ANALYSE" = true ]; then start_analysis; fi
 
 # 4. Initialize Logs
 if [ "$PUT_LOG" = true ]; then
-    [ "$USE_JSON" != true ] && [ "$USE_HTML" != true ] && echo -e "${CYAN}Logging to $LOG_DIR...${NC}"
+    [ "$USE_JSON" != true ] && [ "$USE_HTML" != true ] && [ "$USE_GRAPH" != true ] && echo -e "${CYAN}Logging to $LOG_DIR...${NC}"
     LOG_FILE="$LOG_DIR/l$(( $(ls -1 "$LOG_DIR"/*.log 2>/dev/null | wc -l) + 1 ))_$(date +"%Y-%m-%d_%Hh%M").log"
 fi
 
@@ -163,7 +165,13 @@ if [ "$FORCE_SOURCE_SCAN" = true ]; then source_scan; fi
 if [ -z "$TARGET" ]; then
     if [ "$DISABLE_AUTO" = true ]; then
         if [ "$DO_EDIT_LIST" != true ] && [ "$RUN_LIST" != true ]; then
-            [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ] && echo "{\"status\":\"FAILURE\",\"error\":\"No target\"}" || log_info "${RED}Error: No target specified.${NC}"
+            if [ "$USE_JSON" = true ]; then
+                echo "{\"status\":\"FAILURE\",\"error\":\"No target\"}"
+            elif [ "$USE_HTML" = true ] || [ "$USE_GRAPH" = true ]; then
+                echo "Error: No target specified."
+            else
+                log_info "${RED}Error: No target specified.${NC}"
+            fi
             safe_exit 1
         fi
     elif ! auto_detect_target; then
