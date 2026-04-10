@@ -336,7 +336,7 @@ generate_callgraph_report() {
       --red: #ff3333;
       --text: #e0e0e0;
       --muted: #7f88a8;
-      --edge: #ffffff;
+      --edge: rgba(255,255,255,0.12);
       --shadow: 0 0 24px rgba(0, 212, 255, 0.18);
     }
 
@@ -513,13 +513,12 @@ generate_callgraph_report() {
 
     .legend-dot.forbidden {
       border-color: var(--red);
-      background: rgba(255, 51, 51, 0.25);
+      background: rgba(255, 51, 51, 0.3);
     }
 
     .legend-dot.external {
-      border-color: var(--red);
-      background: rgba(255, 51, 51, 0.15);
-      border-style: dashed;
+      border-color: var(--orange);
+      background: rgba(255, 149, 0, 0.25);
     }
 
     .legend-line {
@@ -617,7 +616,7 @@ generate_callgraph_report() {
     .edge {
       stroke: var(--edge);
       stroke-width: 1px;
-      stroke-opacity: 0.6;
+      stroke-opacity: 0.08;
     }
 
     .node {
@@ -641,14 +640,14 @@ generate_callgraph_report() {
 
     .node.forbidden {
       stroke: var(--red);
-      stroke-dasharray: 0;
-      fill: rgba(255, 51, 51, 0.25);
+      stroke-width: 2px;
+      fill: rgba(255, 51, 51, 0.3);
     }
 
     .node.external {
-      stroke: var(--red);
-      stroke-dasharray: 4 3;
-      fill: rgba(255, 51, 51, 0.15);
+      stroke: var(--orange);
+      stroke-width: 1.8px;
+      fill: rgba(255, 149, 0, 0.25);
     }
 
     .node.match {
@@ -713,8 +712,8 @@ generate_callgraph_report() {
     <div id="legend">
       <h2>Legend</h2>
       <div class="legend-item"><span class="legend-dot user"></span><span>User Function (local)</span></div>
+      <div class="legend-item"><span class="legend-dot external"></span><span>External Authorized (lib)</span></div>
       <div class="legend-item"><span class="legend-dot forbidden"></span><span>Forbidden Function</span></div>
-      <div class="legend-item"><span class="legend-dot external"></span><span>External Function (lib)</span></div>
       <div class="legend-item"><span class="legend-line outgoing"></span><span>Calls (outgoing)</span></div>
       <div class="legend-item"><span class="legend-line incoming"></span><span>Called by (incoming)</span></div>
     </div>
@@ -743,8 +742,8 @@ generate_callgraph_report() {
       radius: Math.max(8, 8 + (node.callCount || 0) * 3),
     }));
 
-    const DEFAULT_EDGE_COLOR = "#ffffff";
-    const DEFAULT_EDGE_OPACITY = 0.6;
+    const DEFAULT_EDGE_COLOR = "rgba(255,255,255,0.12)";
+    const DEFAULT_EDGE_OPACITY = 0.08;
     const OUTGOING_EDGE_COLOR = "#00d4ff";
     const INCOMING_EDGE_COLOR = "#ff9500";
 
@@ -971,32 +970,46 @@ generate_callgraph_report() {
       const selectedOutgoing = new Set(selectedId ? (outgoing.get(selectedId) || []) : []);
       const selectedIncoming = new Set(selectedId ? (incoming.get(selectedId) || []) : []);
 
+      const connectedToSelected = new Set();
+      if (selectedId) {
+        (outgoing.get(selectedId) || []).forEach(id => connectedToSelected.add(id));
+        (incoming.get(selectedId) || []).forEach(id => connectedToSelected.add(id));
+        connectedToSelected.add(selectedId);
+      }
+
       node
         .classed("selected", (d) => d.id === selectedId)
         .classed("forbidden", (d) => !!d.forbidden)
         .classed("external", (d) => !d.forbidden && !d.isUserFunction)
         .classed("match", (d) => !!query && matches.has(d.id))
-        .style("opacity", (d) => !query || matches.has(d.id) ? 1 : 0.14);
+        .style("opacity", (d) => {
+          if (query && matches.has(d.id)) return 1;
+          if (!selectedId) return 1;
+          return connectedToSelected.has(d.id) ? 1 : 0.04;
+        });
 
-      label.style("opacity", (d) => !query || matches.has(d.id) ? 0.95 : 0.12);
+      label.style("opacity", (d) => {
+        if (query && matches.has(d.id)) return 0.95;
+        if (!selectedId) return 0.95;
+        return connectedToSelected.has(d.id) ? 0.95 : 0.04;
+      });
 
       link
         .style("stroke", (d) => {
           const sourceId = edgeSourceId(d);
           const targetId = edgeTargetId(d);
-          if (selectedId && sourceId === selectedId && selectedOutgoing.has(targetId)) return OUTGOING_EDGE_COLOR;
-          if (selectedId && targetId === selectedId && selectedIncoming.has(sourceId)) return INCOMING_EDGE_COLOR;
+          if (selectedId && sourceId === selectedId) return OUTGOING_EDGE_COLOR;
+          if (selectedId && targetId === selectedId) return INCOMING_EDGE_COLOR;
           return DEFAULT_EDGE_COLOR;
         })
         .style("opacity", (d) => {
           const sourceId = edgeSourceId(d);
           const targetId = edgeTargetId(d);
-          const isSelectedEdge =
-            (selectedId && sourceId === selectedId && selectedOutgoing.has(targetId)) ||
-            (selectedId && targetId === selectedId && selectedIncoming.has(sourceId));
-          if (isSelectedEdge) return 0.95;
-          if (!query) return DEFAULT_EDGE_OPACITY;
-          return matches.has(sourceId) || matches.has(targetId) ? 0.72 : 0.06;
+          if (!selectedId) return DEFAULT_EDGE_OPACITY;
+          const isOutgoing = sourceId === selectedId && (outgoing.get(selectedId) || []).includes(targetId);
+          const isIncoming = targetId === selectedId && (incoming.get(selectedId) || []).includes(sourceId);
+          if (isOutgoing || isIncoming) return 0.9;
+          return 0.04;
         })
         .attr("marker-end", (d) => {
           const sourceId = edgeSourceId(d);
