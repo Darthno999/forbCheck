@@ -75,14 +75,14 @@ center_log() {
 
 safe_exit() {
     local exit_code=${1:-0}
-    if [ "$PUT_LOG" = true ] && [ -n "$LOG_FILE" ] && [ "$USE_JSON" = false ]; then
+    if [ "$PUT_LOG" = true ] && [ -n "$LOG_FILE" ] && [ "$USE_JSON" = false ] && [ "$USE_GRAPH" = false ]; then
         echo -e "\n${BLUE}ℹ Scan log saved to: ${YELLOW}$LOG_FILE${NC}"
     fi
     exit "$exit_code"
 }
 
 log_info() {
-    if [ "$USE_JSON" != true ] && [ "$USE_HTML" != true ]; then
+    if [ "$USE_JSON" != true ] && [ "$USE_HTML" != true ] && [ "$USE_GRAPH" != true ]; then
         if [ "$PUT_LOG" = true ] && [ -n "$LOG_FILE" ]; then
             echo -e "$@" | sed 's/\x1b\[[0-9;]*m//g' >> "$LOG_FILE"
         else

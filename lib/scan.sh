@@ -72,7 +72,7 @@ scan_source_engine() {
     local files="$1"
     local user_funcs="$2"
 
-    export USE_JSON USE_HTML BLACKLIST_MODE VERBOSE SHOW_ALL
+    export USE_JSON USE_HTML USE_GRAPH BLACKLIST_MODE VERBOSE SHOW_ALL
     export USER_FUNCS="$user_funcs"
     
     if [ "$BLACKLIST_MODE" = true ]; then
@@ -138,9 +138,15 @@ source_scan() {
     local my_funcs=$(get_user_defined_funcs)
     local scan_output=$(scan_source_engine "$files_list" "$my_funcs")
 
-    if [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ]; then
+    if [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ] || [ "$USE_GRAPH" = true ]; then
         export JSON_RAW_DATA="$scan_output" IS_SOURCE_SCAN=true
-        [ "$USE_JSON" = true ] && generate_json_output || generate_html_report
+        if [ "$USE_JSON" = true ]; then
+            generate_json_output
+        elif [ "$USE_HTML" = true ]; then
+            generate_html_report
+        else
+            generate_callgraph_report
+        fi
     else
         while IFS= read -r line; do log_info "$line"; done <<< "$scan_output"
         
@@ -235,8 +241,14 @@ run_analysis() {
     export IS_SOURCE_SCAN=false
     extract_undefined_symbols; filter_forbidden_functions; build_grep_results
     export FORBIDDEN_COUNT=0; [ -n "$forbidden_list" ] && FORBIDDEN_COUNT=$(echo "$forbidden_list" | wc -w)
-    if [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ]; then
-        [ "$USE_JSON" = true ] && generate_json_output "$FORBIDDEN_COUNT" || generate_html_report "$FORBIDDEN_COUNT"
+    if [ "$USE_JSON" = true ] || [ "$USE_HTML" = true ] || [ "$USE_GRAPH" = true ]; then
+        if [ "$USE_JSON" = true ]; then
+            generate_json_output "$FORBIDDEN_COUNT"
+        elif [ "$USE_HTML" = true ]; then
+            generate_html_report "$FORBIDDEN_COUNT"
+        else
+            generate_callgraph_report
+        fi
         [ $FORBIDDEN_COUNT -eq 0 ] && return 0 || return 1
     else
         print_analysis_report; local errs=$?; if [ $errs -eq 0 ] && [ $FORBIDDEN_COUNT -eq 0 ]; then log_info "\t${GREEN}No forbidden functions detected.${NC}"; fi

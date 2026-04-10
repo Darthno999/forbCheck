@@ -272,6 +272,12 @@ section "Section 15: HTML & Output UI"
 out=$($FORB -s -np --html $QF 2>&1)
 echo "$out" | grep -q "Rapport HTML généré avec succès dans" && pass "--html génère bien le fichier et masque l'UI" || fail "--html" "$out"
 
+rm -f "$_TDIR/forb_callgraph.html"
+out=$($FORB -s -np --graph $QF 2>&1)
+[ -f "$_TDIR/forb_callgraph.html" ] && pass "--graph génère bien forb_callgraph.html" || fail "--graph" "$out"
+grep -q "const DATA =" "$_TDIR/forb_callgraph.html" && pass "--graph injecte les données JSON dans le HTML" || fail "--graph html" ""
+echo "$out" | grep -q "Call graph generated successfully in" && pass "--graph affiche le chemin du rapport" || fail "--graph output" "$out"
+
 rm -rf "$TEST_ROOT/forb_mock_bin_dir"
 mkdir -p "$TEST_ROOT/forb_mock_bin_dir"
 echo '#!/bin/bash' > "$TEST_ROOT/forb_mock_bin_dir/xdg-open"

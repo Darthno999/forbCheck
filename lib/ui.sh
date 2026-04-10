@@ -28,6 +28,7 @@ show_help() {
     printf "  %-24s %s\n" "-h, --help" "Show help message"
     printf "  %-24s %s\n" "--json" "Generate a JSON output for automations"
     printf "  %-24s %s\n" "--html" "Generate a beautiful interactive HTML report"
+    printf "  %-24s %s\n" "--graph" "Generate an interactive D3.js call graph HTML report"
     printf "  %-24s %s\n" "-oh, --open-html" "Open the folder containing HTML reports"
     printf "  %-24s %s\n" "-ol, --open-logs" "Open the folder containing log files"
     printf "  %-24s %s\n" "--log" "Generate a .log of the output"
@@ -53,11 +54,11 @@ show_help() {
 
     echo -e "\n${BOLD}Deep Scan:${NC}"
     printf "  %-24s %s\n" "-s, --source" "Scan source files for unauthorized C functions"
-    printf "  %-24s %s\n" "--analyse" "Interactive analysis of project functions"
 
-    echo -e "\n${BOLD}Library Filters:${NC}"
-    printf "  %-24s %s\n" "-mlx" "Ignore MiniLibX internal calls"
     printf "  %-24s %s\n" "-lm" "Ignore Math library internal calls"
+
+    echo -e "\n${BOLD}Analysis:${NC}"
+    printf "  %-24s %s\n" "-A, --analyse" "Open interactive project analysis dashboard"
 
     echo -e "\n${BOLD}Maintenance:${NC}"
     printf "  %-24s %s\n" "-t, --time" "Show execution duration"
